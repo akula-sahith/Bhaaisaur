@@ -1,6 +1,6 @@
 /**
  * BHAISAUR — Final Edition
- * 4 bhai pngs roam around (beside/above/below) the game container, each in a unique frame.
+ * 8 bhais total: 4 roam the TOP strip, 4 roam the BOTTOM strip around the container.
  */
 
 import { useState, useEffect, useRef, useCallback } from "react";
@@ -20,74 +20,55 @@ const MAX_SPEED       = 18;
 const GAME_WIDTH      = 800;
 const GAME_HEIGHT     = 500;
 
-// ─── Roaming Bhais setup ───────────────────────────────────────────────────────
-// 4 pngs from public/
+// ─── Roaming Bhais ─────────────────────────────────────────────────────────────
+// 4 pngs from public/, each used twice = 8 bhais
 const BHAI_SRCS = ["/bhai1.png", "/bhai2.png", "/bhai3.png", "/bhai4.png"];
 
-// Each bhai gets its own distinct frame look
+// 8 distinct frame styles (pairs for each image)
 const BHAI_FRAMES = [
-  {
-    border: "3px solid #000",
-    borderRadius: "4px",
-    boxShadow: "5px 5px 0px #000",
-    background: "#fff",
-    padding: "4px",
-  },
-  {
-    border: "3px dashed #000",
-    borderRadius: "50%",
-    boxShadow: "0 0 0 4px #000",
-    background: "#f8f8f8",
-    padding: "4px",
-  },
-  {
-    border: "4px double #000",
-    borderRadius: "10px",
-    boxShadow: "-5px 5px 0px #000",
-    background: "#fff",
-    padding: "4px",
-  },
-  {
-    border: "3px solid #000",
-    borderRadius: "16px",
-    boxShadow: "5px -5px 0px #000",
-    background: "#f5f5f5",
-    padding: "4px",
-  },
+  { border: "3px solid #000",  borderRadius: "4px",  boxShadow: "4px 4px 0px #000",  background: "#fff",  padding: "3px" }, // bhai1 top
+  { border: "3px dashed #000", borderRadius: "50%",  boxShadow: "0 0 0 3px #000",    background: "#f9f9f9", padding: "3px" }, // bhai2 top
+  { border: "4px double #000", borderRadius: "10px", boxShadow: "-4px 4px 0px #000", background: "#fff",  padding: "3px" }, // bhai3 top
+  { border: "3px solid #000",  borderRadius: "16px", boxShadow: "4px -4px 0px #000", background: "#f5f5f5", padding: "3px" }, // bhai4 top
+  { border: "3px dotted #000", borderRadius: "6px",  boxShadow: "3px 3px 0px #555",  background: "#fff",  padding: "3px" }, // bhai1 bottom
+  { border: "2px solid #000",  borderRadius: "50%",  boxShadow: "0 0 0 4px #000, 4px 4px 0 #000", background: "#f0f0f0", padding: "3px" }, // bhai2 bottom
+  { border: "3px solid #000",  borderRadius: "0px",  boxShadow: "-3px -3px 0px #000", background: "#fafafa", padding: "3px" }, // bhai3 bottom
+  { border: "4px solid #000",  borderRadius: "12px", boxShadow: "5px 5px 0px #000",  background: "#fff",  padding: "3px" }, // bhai4 bottom
 ];
 
-const BHAI_SIZE = 64; // px
+const BHAI_SIZE = 58; // px
 
-// Each of the 4 bhais starts in a different side around the container
-// so they naturally roam each quadrant/side: left, right, top, bottom
+// TOP strip: y between 1%–12%  (above the game container)
+// BOTTOM strip: y between 88%–98% (below the game container)
 function makeRoamingBhais() {
-  // Start positions as % of viewport — one per side
-  const startZones = [
-    { x: [2, 12],  y: [25, 70] },  // left side
-    { x: [86, 96], y: [25, 70] },  // right side
-    { x: [25, 72], y: [3, 15] },   // top
-    { x: [25, 72], y: [83, 95] },  // bottom
-  ];
+  return Array.from({ length: 8 }, (_, i) => {
+    const isTop = i < 4;
+    const src   = BHAI_SRCS[i % 4];
+    const frame = BHAI_FRAMES[i];
 
-  return BHAI_SRCS.map((src, i) => {
-    const zone = startZones[i];
-    const x = zone.x[0] + Math.random() * (zone.x[1] - zone.x[0]);
-    const y = zone.y[0] + Math.random() * (zone.y[1] - zone.y[0]);
+    // Spread the 4 across the full width so they don't start clumped
+    const xSlot = (i % 4) * 22 + 5; // 5%, 27%, 49%, 71%
+    const x = xSlot + Math.random() * 10;
+    const y = isTop
+      ? 1  + Math.random() * 10   // top strip: 1–11%
+      : 88 + Math.random() * 9;   // bottom strip: 88–97%
+
     return {
       id: i,
       src,
-      frame: BHAI_FRAMES[i],
-      x,   // % of vw
-      y,   // % of vh
-      vx: (0.08 + Math.random() * 0.15) * (Math.random() > 0.5 ? 1 : -1),
-      vy: (0.06 + Math.random() * 0.10) * (Math.random() > 0.5 ? 1 : -1),
-      rotate: Math.random() * 20 - 10,
-      rotateSpeed: (Math.random() * 0.3 - 0.15),
+      frame,
+      isTop,
+      x,
+      y,
+      vx: (0.1 + Math.random() * 0.15) * (Math.random() > 0.5 ? 1 : -1),
+      vy: (0.04 + Math.random() * 0.06) * (Math.random() > 0.5 ? 1 : -1),
+      rotate: Math.random() * 16 - 8,
+      rotateSpeed: Math.random() * 0.25 - 0.125,
     };
   });
 }
 
-// ─── Hook: scale game canvas to viewport ──────────────────────────────────────
+// ─── Hook: scale game canvas ───────────────────────────────────────────────────
 function useGameScale() {
   const [scale, setScale] = useState(1);
   useEffect(() => {
@@ -107,46 +88,37 @@ function useGameScale() {
 // ─── Hook: animate roaming bhais ──────────────────────────────────────────────
 function useRoamingBhais() {
   const [bhais, setBhais] = useState(() => makeRoamingBhais());
-  const bhaisRef = useRef(bhais);
+  const bhaisRef = useRef(null);
   const rafRef   = useRef(null);
 
+  // Keep ref in sync with state init
+  if (bhaisRef.current === null) bhaisRef.current = makeRoamingBhais();
+
   useEffect(() => {
-    // Boundaries in vw/vh % — bhais roam the EDGES around the container
-    // They avoid the central 20–80% x, 18–82% y zone (where the container lives)
-    // Instead they patrol the border ring around it
+    const sVW = (BHAI_SIZE / window.innerWidth)  * 100;
+
     const animate = () => {
       bhaisRef.current = bhaisRef.current.map(b => {
-        let { x, y, vx, vy, rotate, rotateSpeed } = b;
-        const sVW = (BHAI_SIZE / window.innerWidth)  * 100;
-        const sVH = (BHAI_SIZE / window.innerHeight) * 100;
+        let { x, y, vx, vy, rotate, rotateSpeed, isTop } = b;
 
         x += vx;
         y += vy;
         rotate += rotateSpeed;
 
-        // Hard outer boundary bounce
-        if (x < 0)        { x = 0;           vx =  Math.abs(vx); }
-        if (x > 100-sVW)  { x = 100-sVW;     vx = -Math.abs(vx); }
-        if (y < 0)        { y = 0;            vy =  Math.abs(vy); }
-        if (y > 100-sVH)  { y = 100-sVH;     vy = -Math.abs(vy); }
+        // Horizontal bounce — full width
+        if (x < 0)         { x = 0;        vx =  Math.abs(vx); }
+        if (x > 100 - sVW) { x = 100-sVW;  vx = -Math.abs(vx); }
 
-        // Soft repulsion from the center zone — push them back to the edges
-        // Center zone: x 18–80%, y 15–85%
-        const inCenterX = x > 16 && x < 80 - sVW;
-        const inCenterY = y > 14 && y < 82 - sVH;
-
-        if (inCenterX && inCenterY) {
-          // Find which edge they're closest to and nudge them toward it
-          const distLeft   = x - 16;
-          const distRight  = 80 - sVW - x;
-          const distTop    = y - 14;
-          const distBottom = 82 - sVH - y;
-          const minDist = Math.min(distLeft, distRight, distTop, distBottom);
-
-          if (minDist === distLeft)   vx = -Math.abs(vx);
-          if (minDist === distRight)  vx =  Math.abs(vx);
-          if (minDist === distTop)    vy = -Math.abs(vy);
-          if (minDist === distBottom) vy =  Math.abs(vy);
+        // Vertical bounce — locked to their strip
+        const sVH = (BHAI_SIZE / window.innerHeight) * 100;
+        if (isTop) {
+          // Stay in top strip: 0% – 13%
+          if (y < 0)         { y = 0;        vy =  Math.abs(vy); }
+          if (y > 13 - sVH)  { y = 13-sVH;  vy = -Math.abs(vy); }
+        } else {
+          // Stay in bottom strip: 87% – 100%
+          if (y < 87)        { y = 87;       vy =  Math.abs(vy); }
+          if (y > 100 - sVH) { y = 100-sVH; vy = -Math.abs(vy); }
         }
 
         return { ...b, x, y, vx, vy, rotate };
@@ -162,9 +134,9 @@ function useRoamingBhais() {
   return bhais;
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+// ─── Main Component ────────────────────────────────────────────────────────────
 export default function Game() {
-  const scale       = useGameScale();
+  const scale        = useGameScale();
   const roamingBhais = useRoamingBhais();
 
   const [gameState, setGameState] = useState("idle");
@@ -344,7 +316,7 @@ export default function Game() {
     }}>
       <audio ref={jumpSoundRef} src="/bhaailaugh.mp3" preload="auto" />
 
-      {/* ── 4 Roaming Bhais — floating around the container, NOT behind it ── */}
+      {/* ── 8 Roaming Bhais: 4 top, 4 bottom ── */}
       {roamingBhais.map(b => (
         <div
           key={b.id}
@@ -357,12 +329,13 @@ export default function Game() {
             transform: `rotate(${b.rotate}deg)`,
             pointerEvents: "none",
             zIndex: 2,
+            transition: "none",
             ...b.frame,
           }}
         >
           <img
             src={b.src}
-            alt={`bhai ${b.id + 1}`}
+            alt={`bhai ${(b.id % 4) + 1}`}
             style={{
               width: "100%",
               height: "100%",
@@ -413,7 +386,7 @@ export default function Game() {
         <span>{String(score).padStart(5, "0")}</span>
       </div>
 
-      {/* Game canvas wrapper */}
+      {/* Game canvas */}
       <div
         style={{
           width: scaledW,
@@ -425,7 +398,6 @@ export default function Game() {
         onClick={handleTap}
         onTouchStart={handleTap}
       >
-        {/* Actual fixed-size game canvas, CSS-scaled */}
         <div style={{
           width: GAME_WIDTH,
           height: GAME_HEIGHT,
