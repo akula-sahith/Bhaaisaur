@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Analytics } from "@vercel/analytics/next"
+import { Analytics } from "@vercel/analytics/react";
 // ─── Game constants ────────────────────────────────────────────────────────────
 const GROUND_HEIGHT   = 60;
 const PLAYER_WIDTH    = 80;
@@ -283,6 +283,7 @@ export default function Game() {
         * { -webkit-tap-highlight-color: transparent; }
         body { margin: 0; background: #fff; overflow: hidden; touch-action: none; }
       `}</style>
+      <Analytics />
     </div>
   );
 }
