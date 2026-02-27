@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from "react";
-
+import { Analytics } from "@vercel/analytics/next"
 // ─── Game constants ────────────────────────────────────────────────────────────
 const GROUND_HEIGHT   = 60;
 const PLAYER_WIDTH    = 80;
