@@ -1,12 +1,69 @@
 /**
- * BHAISAUR — Final Edition
- * 8 bhais total: 4 roam the TOP strip, 4 roam the BOTTOM strip around the container.
+ * BHAISAUR — Mobile Responsive Edition
+ * Uses CSS scale() to fit the game canvas on any screen size.
  */
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import './App.css';
 
-// ─── Game constants ────────────────────────────────────────────────────────────
+// --- Roaming Bhai images (4 images from public/, each used twice = 8 total) ---
+const BHAI_IMAGES = [
+  "/bhai1.jpg", "/bhai2.jpg", "/bhai3.jpg", "/bhai4.jpg",
+  "/bhai1.jpg", "/bhai2.jpg", "/bhai3.jpg", "/bhai4.jpg",
+];
+
+// Generate 8 roaming bhais with unique random starting positions & speeds
+function makeRoamingBhais() {
+  return BHAI_IMAGES.map((src, i) => ({
+    id: i,
+    src,
+    // Start scattered around edges and middle zone
+    x: 5 + Math.random() * 90,       // % of viewport width
+    y: 20 + Math.random() * 60,       // % of viewport height — keeps them mid-zone
+    vx: (Math.random() * 0.3 + 0.1) * (Math.random() > 0.5 ? 1 : -1),
+    vy: (Math.random() * 0.2 + 0.08) * (Math.random() > 0.5 ? 1 : -1),
+    rotate: Math.random() * 360,
+    rotateSpeed: (Math.random() * 0.4 - 0.2),
+    size: 48 + Math.floor(Math.random() * 24), // 48–72px
+  }));
+}
+
+// Hook: animate roaming bhais around the container area
+function useRoamingBhais() {
+  const [bhais, setBhais] = useState(() => makeRoamingBhais());
+  const rafRef = useRef(null);
+  const bhaisRef = useRef(bhais);
+
+  useEffect(() => {
+    const animate = () => {
+      bhaisRef.current = bhaisRef.current.map(b => {
+        let { x, y, vx, vy, rotate, rotateSpeed, size } = b;
+        const sizeVW = (size / window.innerWidth) * 100;
+        const sizeVH = (size / window.innerHeight) * 100;
+
+        x += vx;
+        y += vy;
+        rotate += rotateSpeed;
+
+        // Bounce off edges — kept in mid zone vertically (15%–85%)
+        if (x < 0)           { x = 0;              vx = Math.abs(vx); }
+        if (x > 100 - sizeVW){ x = 100 - sizeVW;   vx = -Math.abs(vx); }
+        if (y < 15)          { y = 15;              vy = Math.abs(vy); }
+        if (y > 85 - sizeVH) { y = 85 - sizeVH;    vy = -Math.abs(vy); }
+
+        return { ...b, x, y, vx, vy, rotate };
+      });
+      setBhais([...bhaisRef.current]);
+      rafRef.current = requestAnimationFrame(animate);
+    };
+    rafRef.current = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, []);
+
+  return bhais;
+}
+
+// --- GAME CONSTANTS (logical pixels, never change) ---
 const GROUND_HEIGHT   = 60;
 const PLAYER_WIDTH    = 80;
 const PLAYER_HEIGHT   = 80;
@@ -20,123 +77,27 @@ const MAX_SPEED       = 18;
 const GAME_WIDTH      = 800;
 const GAME_HEIGHT     = 500;
 
-// ─── Roaming Bhais ─────────────────────────────────────────────────────────────
-// 4 pngs from public/, each used twice = 8 bhais
-const BHAI_SRCS = ["/bhai1.png", "/bhai2.png", "/bhai3.png", "/bhai4.png"];
-
-// 8 distinct frame styles (pairs for each image)
-const BHAI_FRAMES = [
-  { border: "3px solid #000",  borderRadius: "4px",  boxShadow: "4px 4px 0px #000",  background: "#fff",  padding: "3px" }, // bhai1 top
-  { border: "3px dashed #000", borderRadius: "50%",  boxShadow: "0 0 0 3px #000",    background: "#f9f9f9", padding: "3px" }, // bhai2 top
-  { border: "4px double #000", borderRadius: "10px", boxShadow: "-4px 4px 0px #000", background: "#fff",  padding: "3px" }, // bhai3 top
-  { border: "3px solid #000",  borderRadius: "16px", boxShadow: "4px -4px 0px #000", background: "#f5f5f5", padding: "3px" }, // bhai4 top
-  { border: "3px dotted #000", borderRadius: "6px",  boxShadow: "3px 3px 0px #555",  background: "#fff",  padding: "3px" }, // bhai1 bottom
-  { border: "2px solid #000",  borderRadius: "50%",  boxShadow: "0 0 0 4px #000, 4px 4px 0 #000", background: "#f0f0f0", padding: "3px" }, // bhai2 bottom
-  { border: "3px solid #000",  borderRadius: "0px",  boxShadow: "-3px -3px 0px #000", background: "#fafafa", padding: "3px" }, // bhai3 bottom
-  { border: "4px solid #000",  borderRadius: "12px", boxShadow: "5px 5px 0px #000",  background: "#fff",  padding: "3px" }, // bhai4 bottom
-];
-
-const BHAI_SIZE = 58; // px
-
-// TOP strip: y between 1%–12%  (above the game container)
-// BOTTOM strip: y between 88%–98% (below the game container)
-function makeRoamingBhais() {
-  return Array.from({ length: 8 }, (_, i) => {
-    const isTop = i < 4;
-    const src   = BHAI_SRCS[i % 4];
-    const frame = BHAI_FRAMES[i];
-
-    // Spread the 4 across the full width so they don't start clumped
-    const xSlot = (i % 4) * 22 + 5; // 5%, 27%, 49%, 71%
-    const x = xSlot + Math.random() * 10;
-    const y = isTop
-      ? 1  + Math.random() * 10   // top strip: 1–11%
-      : 88 + Math.random() * 9;   // bottom strip: 88–97%
-
-    return {
-      id: i,
-      src,
-      frame,
-      isTop,
-      x,
-      y,
-      vx: (0.1 + Math.random() * 0.15) * (Math.random() > 0.5 ? 1 : -1),
-      vy: (0.04 + Math.random() * 0.06) * (Math.random() > 0.5 ? 1 : -1),
-      rotate: Math.random() * 16 - 8,
-      rotateSpeed: Math.random() * 0.25 - 0.125,
-    };
-  });
-}
-
-// ─── Hook: scale game canvas ───────────────────────────────────────────────────
+// Hook: compute scale so the game always fits the screen
 function useGameScale() {
   const [scale, setScale] = useState(1);
+
   useEffect(() => {
     const compute = () => {
-      const pad = 16;
-      const sx = (window.innerWidth - pad * 2) / GAME_WIDTH;
-      const sy = (window.innerHeight - 160) / GAME_HEIGHT;
-      setScale(Math.min(sx, sy, 1));
+      const padding = 16;
+      const scaleX = (window.innerWidth - padding * 2) / GAME_WIDTH;
+      const scaleY = (window.innerHeight - 160) / GAME_HEIGHT;
+      setScale(Math.min(scaleX, scaleY, 1));
     };
     compute();
     window.addEventListener("resize", compute);
     return () => window.removeEventListener("resize", compute);
   }, []);
+
   return scale;
 }
 
-// ─── Hook: animate roaming bhais ──────────────────────────────────────────────
-function useRoamingBhais() {
-  const [bhais, setBhais] = useState(() => makeRoamingBhais());
-  const bhaisRef = useRef(null);
-  const rafRef   = useRef(null);
-
-  // Keep ref in sync with state init
-  if (bhaisRef.current === null) bhaisRef.current = makeRoamingBhais();
-
-  useEffect(() => {
-    const sVW = (BHAI_SIZE / window.innerWidth)  * 100;
-
-    const animate = () => {
-      bhaisRef.current = bhaisRef.current.map(b => {
-        let { x, y, vx, vy, rotate, rotateSpeed, isTop } = b;
-
-        x += vx;
-        y += vy;
-        rotate += rotateSpeed;
-
-        // Horizontal bounce — full width
-        if (x < 0)         { x = 0;        vx =  Math.abs(vx); }
-        if (x > 100 - sVW) { x = 100-sVW;  vx = -Math.abs(vx); }
-
-        // Vertical bounce — locked to their strip
-        const sVH = (BHAI_SIZE / window.innerHeight) * 100;
-        if (isTop) {
-          // Stay in top strip: 0% – 13%
-          if (y < 0)         { y = 0;        vy =  Math.abs(vy); }
-          if (y > 13 - sVH)  { y = 13-sVH;  vy = -Math.abs(vy); }
-        } else {
-          // Stay in bottom strip: 87% – 100%
-          if (y < 87)        { y = 87;       vy =  Math.abs(vy); }
-          if (y > 100 - sVH) { y = 100-sVH; vy = -Math.abs(vy); }
-        }
-
-        return { ...b, x, y, vx, vy, rotate };
-      });
-      setBhais([...bhaisRef.current]);
-      rafRef.current = requestAnimationFrame(animate);
-    };
-
-    rafRef.current = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(rafRef.current);
-  }, []);
-
-  return bhais;
-}
-
-// ─── Main Component ────────────────────────────────────────────────────────────
 export default function Game() {
-  const scale        = useGameScale();
+  const scale = useGameScale();
   const roamingBhais = useRoamingBhais();
 
   const [gameState, setGameState] = useState("idle");
@@ -156,6 +117,7 @@ export default function Game() {
   const speedRef        = useRef(INITIAL_SPEED);
   const frameRef        = useRef(0);
   const nextObstacleIn  = useRef(100);
+
   const jumpSoundRef    = useRef(null);
   const videoRef        = useRef(null);
   const audioVersionRef = useRef(0);
@@ -183,7 +145,7 @@ export default function Game() {
   const jump = useCallback(() => {
     if (isJumpingRef.current || gameStateRef.current !== "playing") return;
     isJumpingRef.current = true;
-    velocityRef.current  = JUMP_VELOCITY;
+    velocityRef.current = JUMP_VELOCITY;
     playLaugh();
   }, []);
 
@@ -192,14 +154,15 @@ export default function Game() {
       videoRef.current.pause();
       videoRef.current.currentTime = 0;
     }
-    playerYRef.current     = 0;
-    velocityRef.current    = 0;
-    isJumpingRef.current   = false;
-    obstaclesRef.current   = [];
-    scoreRef.current       = 0;
-    speedRef.current       = INITIAL_SPEED;
-    frameRef.current       = 0;
+    playerYRef.current    = 0;
+    velocityRef.current   = 0;
+    isJumpingRef.current  = false;
+    obstaclesRef.current  = [];
+    scoreRef.current      = 0;
+    speedRef.current      = INITIAL_SPEED;
+    frameRef.current      = 0;
     nextObstacleIn.current = 100;
+
     setScore(0);
     setPlayerY(0);
     setObstacles([]);
@@ -208,25 +171,30 @@ export default function Game() {
   }, []);
 
   const checkCollision = (pY, obs) => {
-    const px = 80 + 15, py = GAME_HEIGHT - GROUND_HEIGHT - PLAYER_HEIGHT - pY + 15;
-    const pw = PLAYER_WIDTH - 30, ph = PLAYER_HEIGHT - 20;
+    const px = 80 + 15;
+    const py = GAME_HEIGHT - GROUND_HEIGHT - PLAYER_HEIGHT - pY + 15;
+    const pw = PLAYER_WIDTH - 30;
+    const ph = PLAYER_HEIGHT - 20;
     for (const ob of obs) {
-      const ox = ob.x + 20, oy = GAME_HEIGHT - GROUND_HEIGHT - OBSTACLE_HEIGHT + 20;
-      const ow = OBSTACLE_WIDTH - 40, oh = OBSTACLE_HEIGHT - 25;
-      if (px < ox+ow && px+pw > ox && py < oy+oh && py+ph > oy) return true;
+      const ox = ob.x + 20;
+      const oy = GAME_HEIGHT - GROUND_HEIGHT - OBSTACLE_HEIGHT + 20;
+      const ow = OBSTACLE_WIDTH - 40;
+      const oh = OBSTACLE_HEIGHT - 25;
+      if (px < ox + ow && px + pw > ox && py < oy + oh && py + ph > oy) return true;
     }
     return false;
   };
 
   const gameLoop = useCallback(() => {
     if (gameStateRef.current !== "playing") return;
+
     frameRef.current++;
     velocityRef.current += GRAVITY;
     playerYRef.current  -= velocityRef.current;
 
     if (playerYRef.current <= 0) {
-      playerYRef.current   = 0;
-      velocityRef.current  = 0;
+      playerYRef.current  = 0;
+      velocityRef.current = 0;
       isJumpingRef.current = false;
     }
 
@@ -243,6 +211,7 @@ export default function Game() {
       nextObstacleIn.current = Math.floor(Math.random() * 70 + minGap);
     }
     obstaclesRef.current = currentObs;
+
     if (frameRef.current % 6 === 0) scoreRef.current++;
 
     if (checkCollision(playerYRef.current, currentObs)) {
@@ -253,6 +222,7 @@ export default function Game() {
     setPlayerY(playerYRef.current);
     setObstacles(currentObs);
     setScore(scoreRef.current);
+
     rafRef.current = requestAnimationFrame(gameLoop);
   }, [handleGameOver]);
 
@@ -261,6 +231,7 @@ export default function Game() {
     return () => cancelAnimationFrame(rafRef.current);
   }, [gameState, gameLoop]);
 
+  // Play death video with sound
   useEffect(() => {
     if (gameState === "dead" && videoRef.current) {
       const video = videoRef.current;
@@ -275,15 +246,15 @@ export default function Game() {
   }, [gameState]);
 
   useEffect(() => {
-    const onKey = (e) => {
+    const handleKeyDown = (e) => {
       if (e.code === "Space" || e.key === "ArrowUp") {
         e.preventDefault();
         if (gameStateRef.current === "playing") jump();
         else if (gameStateRef.current === "idle" || (gameStateRef.current === "dead" && showRetry)) startGame();
       }
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, [jump, startGame, showRetry]);
 
   const handleTap = (e) => {
@@ -292,8 +263,8 @@ export default function Game() {
     else if (gameState === "idle" || (gameState === "dead" && showRetry)) startGame();
   };
 
-  const scaledW  = GAME_WIDTH * scale;
-  const scaledH  = GAME_HEIGHT * scale;
+  const scaledW = GAME_WIDTH * scale;
+  const scaledH = GAME_HEIGHT * scale;
   const isMobile = typeof window !== "undefined" && "ontouchstart" in window;
 
   return (
@@ -314,43 +285,36 @@ export default function Game() {
       touchAction: "none",
       position: "relative",
     }}>
-      <audio ref={jumpSoundRef} src="/bhaailaugh.mp3" preload="auto" />
-
-      {/* ── 8 Roaming Bhais: 4 top, 4 bottom ── */}
+      {/* ── Roaming Bhais (behind everything, pointer-events off) ── */}
       {roamingBhais.map(b => (
-        <div
+        <img
           key={b.id}
+          src={b.src}
+          alt="bhai"
           style={{
             position: "fixed",
             left: `${b.x}vw`,
             top: `${b.y}vh`,
-            width: BHAI_SIZE,
-            height: BHAI_SIZE,
+            width: b.size,
+            height: b.size,
+            objectFit: "cover",
+            borderRadius: "50%",
+            border: "2px solid #000",
             transform: `rotate(${b.rotate}deg)`,
             pointerEvents: "none",
-            zIndex: 2,
-            transition: "none",
-            ...b.frame,
+            zIndex: 0,
+            opacity: 0.55,
+            boxShadow: "0 2px 8px rgba(0,0,0,0.18)",
           }}
-        >
-          <img
-            src={b.src}
-            alt={`bhai ${(b.id % 4) + 1}`}
-            style={{
-              width: "100%",
-              height: "100%",
-              objectFit: "cover",
-              display: "block",
-              borderRadius: "inherit",
-            }}
-          />
-        </div>
+        />
       ))}
 
+      <audio ref={jumpSoundRef} src="/bhaailaugh.mp3" preload="auto" />
+
       {/* Header */}
-      <div style={{ textAlign: "center", marginBottom: scale < 0.55 ? "2px" : "10px", position: "relative", zIndex: 3 }}>
+      <div style={{ textAlign: "center", marginBottom: scale < 0.55 ? "2px" : "10px", position: "relative", zIndex: 1 }}>
         <h1 style={{
-          fontSize: "clamp(1.2rem, 7vw, 2.8rem)",
+          fontSize: `clamp(1.2rem, 7vw, 2.8rem)`,
           fontWeight: 900,
           letterSpacing: "-0.04em",
           textTransform: "uppercase",
@@ -380,20 +344,24 @@ export default function Game() {
         fontWeight: 700,
         marginBottom: "4px",
         position: "relative",
-        zIndex: 3,
+        zIndex: 1,
       }}>
         <span>HI {String(hiScore).padStart(5, "0")}</span>
         <span>{String(score).padStart(5, "0")}</span>
       </div>
 
-      {/* Game canvas */}
+      {/* 
+        RESPONSIVE CANVAS:
+        Outer div = scaled pixel dimensions (what takes up screen space)
+        Inner div = always 800×500 in logical px, scaled via CSS transform
+      */}
       <div
         style={{
           width: scaledW,
           height: scaledH,
           position: "relative",
           flexShrink: 0,
-          zIndex: 3,
+          zIndex: 1,
         }}
         onClick={handleTap}
         onTouchStart={handleTap}
@@ -412,7 +380,7 @@ export default function Game() {
           overflow: "hidden",
           cursor: "pointer",
         }}>
-          {/* Ground line */}
+          {/* Ground */}
           <div style={{ position: "absolute", left: 0, right: 0, bottom: GROUND_HEIGHT, height: 2, background: "#000" }} />
 
           {/* Player */}
@@ -454,9 +422,14 @@ export default function Game() {
           {/* Death screen */}
           {gameState === "dead" && (
             <div style={{
-              position: "absolute", inset: 0, display: "flex",
-              flexDirection: "column", alignItems: "center", justifyContent: "center",
-              background: "#fff", zIndex: 20,
+              position: "absolute",
+              inset: 0,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              background: "#fff",
+              zIndex: 20,
             }}>
               <video
                 ref={videoRef}
@@ -467,10 +440,16 @@ export default function Game() {
               {showRetry && (
                 <div style={{ position: "absolute", bottom: 24, animation: "gameBounce 0.7s ease-in-out infinite alternate" }}>
                   <button style={{
-                    padding: "14px 32px", background: "#000", color: "#fff",
-                    fontFamily: "monospace", fontWeight: 900, fontSize: 20,
-                    textTransform: "uppercase", border: "2px solid #fff",
-                    boxShadow: "0 4px 16px rgba(0,0,0,0.3)", cursor: "pointer",
+                    padding: "14px 32px",
+                    background: "#000",
+                    color: "#fff",
+                    fontFamily: "monospace",
+                    fontWeight: 900,
+                    fontSize: 20,
+                    textTransform: "uppercase",
+                    border: "2px solid #fff",
+                    boxShadow: "0 4px 16px rgba(0,0,0,0.3)",
+                    cursor: "pointer",
                     letterSpacing: "0.05em",
                   }}>
                     RETRY BHAAi
@@ -483,14 +462,24 @@ export default function Game() {
           {/* Idle screen */}
           {gameState === "idle" && (
             <div style={{
-              position: "absolute", inset: 0, display: "flex",
-              alignItems: "center", justifyContent: "center",
-              background: "rgba(255,255,255,0.88)", zIndex: 20,
+              position: "absolute",
+              inset: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: "rgba(255,255,255,0.88)",
+              zIndex: 20,
             }}>
               <button style={{
-                padding: "20px 52px", background: "#000", color: "#fff",
-                fontFamily: "monospace", fontWeight: 900, fontSize: 26,
-                textTransform: "uppercase", border: "none", cursor: "pointer",
+                padding: "20px 52px",
+                background: "#000",
+                color: "#fff",
+                fontFamily: "monospace",
+                fontWeight: 900,
+                fontSize: 26,
+                textTransform: "uppercase",
+                border: "none",
+                cursor: "pointer",
                 letterSpacing: "0.05em",
               }}>
                 START GAME
@@ -509,7 +498,7 @@ export default function Game() {
         letterSpacing: "0.12em",
         fontWeight: 700,
         position: "relative",
-        zIndex: 3,
+        zIndex: 1,
       }}>
         {isMobile ? "TAP TO JUMP" : "SPACE / CLICK TO JUMP"}
       </p>
